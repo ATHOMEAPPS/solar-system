@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://slaveplanet-hash.github.io/solar-system/"><b>▶ Open the live simulator</b></a>
+  <a href="https://athomeapps.github.io/solar-system/"><b>▶ Open the live simulator</b></a>
   &nbsp;·&nbsp; <a href="INSTALL.md">Run it locally</a>
   &nbsp;·&nbsp; <a href="#talk-to-it-through-an-ai">Talk to it through an AI</a>
 </p>
@@ -86,15 +86,15 @@ One double-click on `install-mcp.bat` sets it up. See [INSTALL.md](INSTALL.md#6-
 
 ## Run it yourself
 
-Open the **[live version](https://slaveplanet-hash.github.io/solar-system/)**, or run it on your own computer to get the full dataset, fresh satellites and the AI connection. The step-by-step guide for Windows is in **[INSTALL.md](INSTALL.md)**: install Node.js, double-click `update.bat`, run `npm run serve`, and open `http://localhost:8130/`.
+Open the **[live version](https://athomeapps.github.io/solar-system/)**, or run it on your own computer to get the full dataset, fresh satellites and the AI connection. The step-by-step guide for Windows is in **[INSTALL.md](INSTALL.md)**: install Node.js, double-click `update.bat`, run `npm run serve`, and open `http://localhost:8130/`.
 
 Handy links, all of which work on the live site:
 
-- [Saturn with its rings wide open (2017)](https://slaveplanet-hash.github.io/solar-system/?focus=saturn&t=2017-06-15T00:00&rate=0)
-- [The Moon's shadow on Earth, 8 April 2024](https://slaveplanet-hash.github.io/solar-system/?focus=earth&t=2024-04-08T18:18&rate=0&scale=true)
-- [The red Moon of a total lunar eclipse](https://slaveplanet-hash.github.io/solar-system/?focus=moon&t=2025-03-14T06:58&rate=0&scale=true)
-- [Voyager 1 in interstellar space](https://slaveplanet-hash.github.io/solar-system/?focus=voyager1)
-- [Standing on Europa under Jupiter](https://slaveplanet-hash.github.io/solar-system/?focus=europa&surface=europa)
+- [Saturn with its rings wide open (2017)](https://athomeapps.github.io/solar-system/?focus=saturn&t=2017-06-15T00:00&rate=0)
+- [The Moon's shadow on Earth, 8 April 2024](https://athomeapps.github.io/solar-system/?focus=earth&t=2024-04-08T18:18&rate=0&scale=true)
+- [The red Moon of a total lunar eclipse](https://athomeapps.github.io/solar-system/?focus=moon&t=2025-03-14T06:58&rate=0&scale=true)
+- [Voyager 1 in interstellar space](https://athomeapps.github.io/solar-system/?focus=voyager1)
+- [Standing on Europa under Jupiter](https://athomeapps.github.io/solar-system/?focus=europa&surface=europa)
 
 ## What's new
 

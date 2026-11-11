@@ -1,6 +1,6 @@
 # Sol — Local install and usage guide
 
-How to run Sol on your own computer: download the data, start the local server, keep it updated, and connect an AI assistant. For what the project is, see the [README](README.md). To just look at it, open the [live version](https://slaveplanet-hash.github.io/solar-system/).
+How to run Sol on your own computer: download the data, start the local server, keep it updated, and connect an AI assistant. For what the project is, see the [README](README.md). To just look at it, open the [live version](https://athomeapps.github.io/solar-system/).
 
 This guide is for **Windows**. Every command goes in **PowerShell** or **Command Prompt**, opened in this `solar-system` folder (in File Explorer, click the address bar, type `powershell`, press Enter).
 
