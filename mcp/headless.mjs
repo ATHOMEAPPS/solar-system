@@ -142,7 +142,7 @@ export function bodyPosition({ body, time, lat, lon, elevation_m }) {
     out.from_observer = { lat: +lat, lon: +lon, azimuth_deg: r2(la.az, 2), direction: compass(la.az), altitude_deg: r2(la.alt, 2), above_horizon: la.alt > 0,
       note: 'Topocentric, geometric (no atmospheric refraction: near the horizon objects appear ~0.5° higher).' };
   }
-  out.accuracy = key === 'moon' ? 'Moon: Meeus series, ~10″ (a few km).' : MOON_PARENT[key] ? 'Mean elements fitted to JPL Horizons (see npm test).' : 'JPL Standish elements: arcsecond-level for 1800–2050 (checked against Horizons in npm test).';
+  out.accuracy = key === 'moon' ? 'Moon: Meeus series; measured against JPL Horizons over 1800–2050: worst 11″ (20 km), typically 3″.' : MOON_PARENT[key] ? 'Elements fitted to JPL Horizons; measured on independent dates over 1850–2050: within 0.5° along the orbit (Triton 0.5°, most moons under 0.2°).' : 'VSOP87A (Pluto: JPL Horizons table); measured against JPL Horizons over 1800–2050: within 1″ for Mercury–Saturn and Pluto, 2.3″ for Uranus and Neptune (npm test).';
   return out;
 }
 

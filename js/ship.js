@@ -20,6 +20,8 @@ export const SHIP_MODELS = [
   { id: 'placeholder', name: 'Placeholder shuttle', lengthM: 60 },
   { id: 'sample', name: 'Sample', lengthM: 289, forward: '+Z',
     build: async () => (await import('./ships/Sample.js')).buildSampleShip() },
+  { id: 'enterprise', name: 'Enterprise NCC-1701', lengthM: 288.6, forward: '+X',
+    build: async () => (await import('./ships/Enterprise.js')).buildEnterpriseShip() },
 ];
 const THREE_VER = '0.160.0';
 const LOGDEPTH_V = '#include <common>\n#include <logdepthbuf_pars_vertex>';

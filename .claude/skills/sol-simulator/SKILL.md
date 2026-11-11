@@ -44,8 +44,8 @@ If Earth or another body blocks the view, change the azimuth or elevation.
 
 ## Accuracy to state when it matters
 
-- Planets: JPL elements, arcsecond-level for 1800–2050.
-- Moon: a few km.
+- Planets: VSOP87 (Pluto from a JPL Horizons table); within 1″ of JPL Horizons for Mercury–Saturn and Pluto, 2.3″ for Uranus and Neptune, 1800–2050.
+- Moon: worst 11″ (20 km), typically 3″.
 - Eclipses: match NASA's catalogue (time within minutes).
 - Satellites (SGP4): about 1 km at the snapshot, growing 1–3 km/day in low orbit. Pass times near the snapshot are good to seconds.
 - Elevations are geometric: add about 0.5° near the horizon for refraction.

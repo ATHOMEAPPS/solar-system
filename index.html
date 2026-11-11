@@ -161,6 +161,86 @@
     #modes { top: auto; bottom: 120px; }
     #info { left: 14px; right: 14px; width: auto; bottom: 170px; }
   }
+
+  /* ---- Readability and phone pass ------------------------------------------------ */
+  :root { --glass: rgba(14, 20, 32, 0.76); --tb-h: 62px; --md-h: 50px; }
+  .panel { z-index: 6; }                       /* above the labels (auto) and the sensor overlay (3) */
+  #labels { z-index: 1; }
+  button { font-size: 13px; padding: 7px 11px; min-height: 36px; }
+  #hud { font-size: 13px; min-width: 300px; max-width: 360px; }
+  #hud h1 { font-size: 11.5px; }
+  #hud-date { font-size: 18px; }
+  #hud-details { display: none; }
+  #hud.details #hud-details { display: block; }
+  #hud-more { margin-top: 8px; width: 100%; min-height: 30px; padding: 4px 9px; font-size: 12px; color: var(--dim); }
+  #bodies { width: 220px; }
+  #bodies h2, #info h2 { font-size: 11px; }
+  #body-search { width: 100%; margin: 0 0 6px; font: 13px var(--sans); color: var(--text); background: rgba(0,0,0,.3);
+                 border: 1px solid var(--edge); border-radius: 7px; padding: 7px 9px; min-height: 34px; }
+  #body-search::placeholder { color: var(--dim); }
+  #body-none { display: none; color: var(--dim); font-size: 12px; padding: 6px; }
+  .body-btn { min-height: 32px; padding: 5px 9px; }
+  .body-btn.moon { min-height: 28px; padding: 3px 9px 3px 26px; font-size: 12px; }
+  .body-section { font-size: 10.5px; }
+  #info { width: 330px; font-size: 13px; }
+  #info dl { font-size: 12.5px; }
+  #info-notes { font-size: 12.5px; }
+  .info-btn { min-height: 34px; }
+  #help { font-size: 12px; max-width: 390px; }
+  .label { font-size: 12.5px; }
+  .label.moon, .label.minor { font-size: 11.5px; }
+  .label.sb, .label.path { font-size: 11px; }
+  #date-input { font-size: 13px; padding: 7px 8px; min-height: 36px; }
+  #btn-tz { font-family: var(--mono); font-size: 12px; padding: 7px 8px; }
+  #gui.lil-gui { --font-size: 12.5px; --input-font-size: 12.5px; --widget-height: 24px; --spacing: 5px; }
+  .m-only { display: none; }
+
+  /* Welcome card */
+  #welcome { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.5); z-index: 40; }
+  #welcome.open { display: flex; }
+  #welcome .panel { position: relative; width: min(620px, calc(100vw - 28px)); max-height: calc(100vh - 28px); overflow: auto; padding: 20px 22px; background: var(--glass-strong); }
+  #welcome h2 { margin: 0 0 6px; font: 600 22px var(--sans); color: #fff; }
+  #welcome p { margin: 0 0 14px; font-size: 14px; line-height: 1.5; color: var(--text); }
+  #welcome .w-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  #welcome .w-grid button { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 12px 14px; font-size: 15px; }
+  #welcome .w-grid button span { font-size: 12.5px; font-weight: 400; color: var(--dim); }
+  #welcome .w-tip { font-size: 12.5px; color: var(--dim); }
+  #welcome .actions { display: flex; justify-content: flex-end; }
+  #welcome-close { padding: 8px 18px; }
+
+  /* On-screen flight pad (touch screens, while flying or walking) */
+  #pad { display: none; }
+  body.touch.flying:not(.hide-ui) #pad { display: block; }
+  #pad .pad-l, #pad .pad-r { position: fixed; bottom: calc(var(--tb-h) + var(--md-h) + 34px); display: grid; gap: 6px; z-index: 7; }
+  #pad .pad-l { left: 14px; grid-template-columns: repeat(3, 54px); }
+  #pad .pad-r { right: 14px; grid-template-columns: 74px; }
+  #pad button { height: 54px; padding: 0; font-size: 18px; background: var(--glass); touch-action: none; user-select: none; -webkit-user-select: none; }
+  #pad .pad-r button { font-size: 13px; height: 44px; }
+  #pad button.held { background: rgba(127,212,255,.3); border-color: var(--accent); }
+
+  @media (max-width: 900px) {
+    .m-only { display: inline-block; }
+    #hud { min-width: 0; max-width: none; width: calc(100vw - 28px); font-size: 12px; padding: 9px 12px; }
+    #hud h1 { display: none; }
+    #hud-date { font-size: 16px; }
+    #modes { top: auto; bottom: calc(var(--tb-h) + 22px); flex-wrap: wrap; justify-content: center; width: calc(100vw - 28px); }
+    #modes .kbd, #btn-verify { display: none; }
+    #modes button, #timebar button { padding: 7px 8px; }
+    #rate-presets button:nth-child(2), #rate-presets button:nth-child(5) { display: none; }
+    #timebar .divider { display: none; }
+    #info { left: 14px; right: 14px; width: auto; bottom: calc(var(--tb-h) + var(--md-h) + 30px); max-height: 30vh; overflow: auto; }
+    body.flying #info { display: none; }
+    #info:not(.expanded) h2, #info:not(.expanded) dl, #info:not(.expanded) #info-notes-row { display: none; }
+    #info-type { margin-bottom: 0; }
+    #info-name { cursor: pointer; }
+    #info-name::after { content: "▾ details"; margin-left: auto; font: 12px var(--sans); color: var(--dim); }
+    #info.expanded #info-name::after { content: "▴ hide"; }
+    #gui.lil-gui { display: none; z-index: 26 !important; max-height: 70vh; }
+    body.show-gui #gui.lil-gui { display: flex; }
+    body.show-bodies #bodies { display: block; top: 14px !important; left: 14px; right: 14px; width: auto;
+                               bottom: calc(var(--tb-h) + var(--md-h) + 30px); max-height: none !important; z-index: 26; background: var(--glass-strong); }
+    #welcome .w-grid { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
@@ -170,46 +250,53 @@
 <div id="hud" class="panel">
   <h1>Sol · Solar System Simulator</h1>
   <div id="hud-date">—</div>
-  <div class="row"><span class="k" id="hud-jd">—</span></div>
-  <div class="row"><span class="k">Time rate</span><span id="hud-rate">—</span></div>
-  <div class="row"><span class="k">Scale</span><span id="hud-scale">—</span></div>
-  <div class="sep"></div>
-  <div class="row"><span class="k">Camera</span><span id="hud-mode">—</span></div>
-  <div class="row"><span class="k">Target</span><span id="hud-target">—</span></div>
+  <div class="row"><span class="k">Time speed</span><span id="hud-rate">—</span></div>
+  <div class="row"><span class="k">Looking at</span><span id="hud-target">—</span></div>
   <div class="row"><span class="k">Distance</span><span id="hud-dist">—</span></div>
-  <div class="row"><span class="k">Altitude</span><span id="hud-alt">—</span></div>
-  <div class="row"><span class="k">Speed <span id="hud-speed-ref"></span></span><span id="hud-speed">—</span></div>
-  <div class="row"><span class="k">Light from Sun</span><span id="hud-light">—</span></div>
-  <div class="sep"></div>
-  <div class="row"><span class="k">Data</span><span id="hud-data">loading…</span></div>
-  <div class="row"><span class="k">Small bodies</span><span id="hud-sb">—</span></div>
-  <div class="row" id="hud-sat-row" style="display:none"><span class="k">Satellites</span><span id="hud-sat">—</span></div>
   <div class="row" id="hud-shower-row" style="display:none"><span class="k">Meteor shower</span><span id="hud-shower"></span></div>
-  <div class="row warn" id="hud-unc-row" style="display:none"><span class="k">⚠ Orbits</span><span id="hud-unc"></span></div>
+  <div id="hud-details">
+    <div class="sep"></div>
+    <div class="row"><span class="k">UTC</span><span id="hud-utc">—</span></div>
+    <div class="row"><span class="k">Julian date</span><span id="hud-jd">—</span></div>
+    <div class="row"><span class="k">Scale</span><span id="hud-scale">—</span></div>
+    <div class="row"><span class="k">Camera</span><span id="hud-mode">—</span></div>
+    <div class="row"><span class="k">Altitude</span><span id="hud-alt">—</span></div>
+    <div class="row"><span class="k">Speed <span id="hud-speed-ref"></span></span><span id="hud-speed">—</span></div>
+    <div class="row"><span class="k">Light from Sun</span><span id="hud-light">—</span></div>
+    <div class="sep"></div>
+    <div class="row"><span class="k">Data</span><span id="hud-data">loading…</span></div>
+    <div class="row"><span class="k">Small bodies</span><span id="hud-sb">—</span></div>
+    <div class="row" id="hud-sat-row" style="display:none"><span class="k">Satellites</span><span id="hud-sat">—</span></div>
+    <div class="row warn" id="hud-unc-row" style="display:none"><span class="k">⚠ Orbits</span><span id="hud-unc"></span></div>
+  </div>
+  <button id="hud-more" aria-expanded="false">More details ▾</button>
 </div>
 
-<div id="bodies" class="panel"><h2>Bodies</h2><div id="body-list"></div></div>
+<div id="bodies" class="panel"><h2>Bodies</h2><input id="body-search" type="search" placeholder="Search bodies…" aria-label="Search bodies" autocomplete="off"><div id="body-none">Nothing found</div><div id="body-list"></div></div>
 
 <div id="modes" class="panel">
+  <button id="btn-bodies" class="m-only" title="Choose a planet, moon or other body">☰ Bodies</button>
   <button data-mode="1" title="Free flight (1)"><span class="kbd">1</span>Free</button>
   <button data-mode="2" title="Orbit / focus (2)"><span class="kbd">2</span>Orbit</button>
   <button data-mode="3" title="Ship chase camera (3)"><span class="kbd">3</span>Chase</button>
   <button data-mode="4" title="Ship cockpit (4)"><span class="kbd">4</span>Cockpit</button>
   <button id="btn-surface" title="Stand on the selected body and look at the sky (G)"><span class="kbd">G</span>Surface</button>
   <button id="btn-verify" title="Run accuracy self-checks">✓ Verify</button>
+  <button id="btn-gear" class="m-only" title="Settings" aria-label="Settings">⚙</button>
+  <button id="btn-help" title="Welcome and things to try" aria-label="Welcome and things to try">?</button>
 </div>
 
 <div id="timebar" class="panel">
   <div class="group">
-    <button id="btn-reverse" title="Reverse time (R)">⇆</button>
-    <button id="btn-pause" title="Pause / play (P)">❚❚</button>
+    <button id="btn-reverse" title="Reverse time (R)" aria-label="Reverse time">⇆</button>
+    <button id="btn-pause" title="Pause / play (P)" aria-label="Pause or play">❚❚</button>
   </div>
   <div class="divider"></div>
   <div class="group" id="rate-presets"></div>
   <div class="divider"></div>
   <div class="group">
-    <input id="date-input" type="datetime-local" step="60" aria-label="Jump to date (UTC)">
-    <span class="utc">UTC</span>
+    <input id="date-input" type="datetime-local" step="60" aria-label="Jump to date">
+    <button id="btn-tz" title="Switch between your local time and UTC">Local</button>
     <button id="btn-go">Go</button>
     <button id="btn-now">Now</button>
   </div>
@@ -239,6 +326,31 @@
   <div id="help-surface" style="display:none"><b>Drag</b>/<b>Arrows</b> look around · <b>WASD</b> walk · <b>Shift</b> run<br><b>Wheel</b> zoom (binoculars) · <b>P</b> pause · <b>[ ]</b> time rate<br><b>G</b> or <b>2</b> leave the surface · <b>H</b> hide UI</div>
 </div>
 <div id="drop-hint">Drop a <b>.glb</b> (or a <b>.gltf</b> with its .bin and textures) to fly it as your ship</div>
+
+<div id="pad">
+  <div class="pad-l">
+    <span></span><button data-k="KeyW" aria-label="Forward">▲</button><span></span>
+    <button data-k="KeyA" aria-label="Left">◀</button><button data-k="KeyS" aria-label="Back">▼</button><button data-k="KeyD" aria-label="Right">▶</button>
+  </div>
+  <div class="pad-r">
+    <button data-k="Space">Up</button><button data-k="KeyC">Down</button><button data-k="ShiftLeft">Boost</button>
+  </div>
+</div>
+
+<div id="welcome">
+  <div class="panel" role="dialog" aria-labelledby="welcome-title">
+    <h2 id="welcome-title">Welcome to Sol</h2>
+    <p>A live, accurate model of the Solar System: every planet, moon and spacecraft is where it really is right now. Pick something to try.</p>
+    <div class="w-grid">
+      <button data-w="saturn"><b>🪐 Visit Saturn</b><span>Fly to the rings and moons</span></button>
+      <button data-w="moon"><b>🌙 Stand on the Moon</b><span>See the sky from the lunar surface</span></button>
+      <button data-w="events"><b>🌒 Eclipses and events</b><span>Jump to the next eclipse, meteor shower or flyby</span></button>
+      <button data-w="ship"><b>🚀 Fly a starship</b><span>Take the Enterprise out from Earth</span></button>
+    </div>
+    <p class="w-tip"><b>Drag</b> to look around, <b>scroll or pinch</b> to zoom, and <b>click</b> anything to fly there. The bar at the bottom speeds time up or jumps to a date. Press <b>?</b> to see this again.</p>
+    <div class="actions"><button id="welcome-close">Just explore</button></div>
+  </div>
+</div>
 
 <div id="toasts"></div>
 <div id="credits" style="display:none">Planet textures: <a href="https://www.solarsystemscope.com/textures/" target="_blank" rel="noopener">Solar System Scope</a> (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>), NASA data</div>

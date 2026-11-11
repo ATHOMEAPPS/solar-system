@@ -16,7 +16,7 @@ import * as THREE from 'three';
 import { SAT_GROUPS, temeToEclipticMatrix, satPosition, satValidity, satOrbitSummary, nearEarthToScene,
   R_EARTH, ISS_NORAD, FRESH_DAYS, MAX_DAYS } from './satcore.js';
 import { tdbToUTC, utcToTDB, jdToUTCString } from './time.js';
-import { CRAFT, buildModel, frameAlong } from './spacecraft.js';
+import { CRAFT, buildModel, frameAlong, satelliteStyle } from './spacecraft.js';
 
 const NS = 181;                  // vertices per path
 const NG = SAT_GROUPS.length;
@@ -54,7 +54,7 @@ export class SatelliteLayer {
     this.sats = sats;
     this.N = sats.length;
     this.visible = SAT_GROUPS.map(() => true);
-    this.settings = { points: true, paths: true, labels: true, pathGain: 0.5, size: 3 };
+    this.settings = { points: true, paths: false, labels: true, pathGain: 0.5, size: 3 };
     this.hidden = false;          // surface view
     this.overlay = true;          // sensor overlay (paths + labels need it)
     this.selected = -1;
@@ -227,6 +227,14 @@ void main() {
     b.type = `Artificial satellite · ${g.name}`;
     b.color = g.color;
     b.orbitDays = s.periodMin / 1440;
+    // Model and size by kind (Hubble, Tiangong, navigation, Dragon, …); the geometries are built once and kept.
+    const m = satelliteStyle(s.name, g.key);
+    this._models = this._models || {};
+    const geo = this._models[m.style] || (this._models[m.style] = buildModel(m.style));
+    if (b.mesh && b.mesh.geometry !== geo) b.mesh.geometry = geo;
+    b.geometry = geo;
+    b.radius = m.span / 2000;                    // km: half the largest dimension
+    b.spanM = m.span; b.modelNote = m.what;
     b.label.textContent = s.name;
     b.label.style.setProperty('--c', g.color);
     return b;

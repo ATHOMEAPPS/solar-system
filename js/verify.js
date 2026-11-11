@@ -94,7 +94,7 @@ function horizonsCheck(key, jdUTC) {
   if (ref == null) return { name, status: 'SKIP', detail: `date ${jdToUTCString(jdUTC, false)} outside embedded Horizons table (2024–2030); Phase 3 data script extends this` };
   const ours = eclLonDeg(computeSystemState(jd)[key]);
   let dl = Math.abs(ours - ref); if (dl > 180) dl = 360 - dl;
-  return { name, status: dl < 1 ? 'PASS' : 'FAIL', detail: `${jdToUTCString(jdUTC, false)} UTC: sim ${ours.toFixed(3)}°, Horizons ${ref.toFixed(3)}°, Δ ${dl.toFixed(4)}° (limit 1°)` };
+  return { name, status: dl < 0.01 ? 'PASS' : 'FAIL', detail: `${jdToUTCString(jdUTC, false)} UTC: sim ${ours.toFixed(3)}°, Horizons ${ref.toFixed(3)}°, Δ ${dl.toFixed(4)}° (limit 0.01°; the embedded table is rounded to 0.001°)` };
 }
 
 /** Mean synodic month from successive new moons (geocentric Sun–Moon elongation = 0). */
@@ -197,7 +197,7 @@ function moonsVsHorizons() {
     const p = moonPlanetocentricKm(key, MOON_REF_JD);
     const ang = Math.acos(Math.min(1, dot(p, ref) / (norm(p) * norm(ref)))) / DEG;
     // Per-moon limit from its fit residual over 1850–2050 (Mimas's resonance libration is the loosest).
-    const limit = Math.max(1, 4 * MOON_ELEMENTS[key].rms + 0.3);
+    const limit = Math.max(0.5, 4 * MOON_ELEMENTS[key].rms + 0.1);
     if (ang > limit) fails.push(key);
     if (ang > worst) { worst = ang; worstKey = key; worstKm = norm(sub(p, ref)); }
     lines.push(`${key} ${ang.toFixed(2)}°`);

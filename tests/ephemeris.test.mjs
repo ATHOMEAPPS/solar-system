@@ -15,7 +15,8 @@ const angle = (a, b) => {
   return Math.acos(Math.min(1, Math.max(-1, d))) / DEG;
 };
 const names = { 199: 'mercury', 299: 'venus', 399: 'earth', 499: 'mars', 599: 'jupiter', 699: 'saturn', 799: 'uranus', 899: 'neptune', 999: 'pluto' };
-// Standish Table 1 quoted max errors (arcsec) are ~ 15–400″ over 1800–2050; allow generous 0.5° except Pluto.
+// VSOP87A (Pluto: Horizons table): about 1″ (2.3″ for Uranus and Neptune). tests/accuracy.test.mjs is the
+// thorough check (160 dates); this one uses six epochs.
 for (const [id, rows] of Object.entries(fx.planets)) {
   let worst = 0, worstR = 0;
   for (const r of rows) {
@@ -25,8 +26,7 @@ for (const [id, rows] of Object.entries(fx.planets)) {
     worst = Math.max(worst, angle(p, ref));
     worstR = Math.max(worstR, Math.abs(Math.hypot(...p) - Math.hypot(...ref)) / AU_KM);
   }
-  // Standish quotes Table-1 errors up to ~600″ for Jupiter/Saturn (Great Inequality) — allow 0.2° there.
-  const tol = (id === '599' || id === '699') ? 0.2 : 0.1;
+  const tol = 5 / 3600;
   check(`${names[id]} helio direction`, worst < tol,`worst ${(worst * 3600).toFixed(1)}″, |Δr| ${worstR.toExponential(2)} AU`);
 }
 // Moon geocentric
@@ -35,7 +35,7 @@ for (const r of fx.moon) {
   const ref = [r.x, r.y, r.z];
   const ang = angle(m, ref) * 3600;
   const dr = Math.hypot(...m) - Math.hypot(...ref);
-  check(`moon @JD ${r.jd.toFixed(4)}`, ang < 60 && Math.abs(dr) < 50, `Δθ ${ang.toFixed(1)}″  Δr ${dr.toFixed(1)} km  |Δ| ${Math.hypot(m[0]-r.x,m[1]-r.y,m[2]-r.z).toFixed(0)} km`);
+  check(`moon @JD ${r.jd.toFixed(4)}`, ang < 25 && Math.abs(dr) < 45, `Δθ ${ang.toFixed(1)}″  Δr ${dr.toFixed(1)} km  |Δ| ${Math.hypot(m[0]-r.x,m[1]-r.y,m[2]-r.z).toFixed(0)} km`);
 }
 // Mars/Jupiter table
 for (const id of ['499', '599']) {
@@ -45,7 +45,7 @@ for (const id of ['499', '599']) {
     let d = Math.abs(eclLonDeg(p) - eclLonDeg([r.x, r.y, r.z])); if (d > 180) d = 360 - d;
     worst = Math.max(worst, d);
   }
-  check(`${names[id]} longitude 2024–2030 vs Horizons`, worst < 1, `worst ${worst.toFixed(4)}°`);
+  check(`${names[id]} longitude 2024–2030 vs Horizons`, worst < 0.001, `worst ${worst.toFixed(5)}°`);
 }
 // Solver cross-checks
 {

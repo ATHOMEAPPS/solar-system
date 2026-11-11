@@ -50,32 +50,49 @@ export class CameraController {
   // ---------------------------------------------------------------------------
   _bindInput() {
     const dom = this.dom;
-    let down = null;
+    let down = null, pinch = 0;
+    const pts = new Map();             // active pointers (touch: movementX is not reliable, so deltas are tracked here)
+    const release = (e) => { pts.delete(e.pointerId); if (pts.size < 2) pinch = 0; };
+    dom.addEventListener('pointercancel', (e) => { release(e); down = null; });
     dom.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
-      down = { moved: 0 };
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      down = { moved: pts.size > 1 ? 100 : 0 };       // a second finger is a pinch, never a click
       if (this.mode !== 'free' && document.pointerLockElement !== dom) dom.setPointerCapture(e.pointerId);
     });
     dom.addEventListener('pointermove', (e) => {
       const locked = document.pointerLockElement === dom;
+      let mx = e.movementX, my = e.movementY;
+      const pt = pts.get(e.pointerId);
+      if (pt) { if (e.pointerType === 'touch') { mx = e.clientX - pt.x; my = e.clientY - pt.y; } pt.x = e.clientX; pt.y = e.clientY; }
+      if (pts.size === 2) {                            // two fingers: pinch to zoom
+        const [a, b] = [...pts.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinch && d > 1) this._zoom(pinch / d);
+        pinch = d;
+        if (down) down.moved += 100;
+        return;
+      }
       if (locked || down) {
-        if (down) down.moved += Math.abs(e.movementX) + Math.abs(e.movementY);
-        if (this.mode === 'free' && locked) this._look(e.movementX, e.movementY);
-        else if (this.piloting) { this._lookAcc.dx += e.movementX; this._lookAcc.dy += e.movementY; }
-        else if (this.mode === 'surface') this._surfaceLook(e.movementX, e.movementY);
+        if (down) down.moved += Math.abs(mx) + Math.abs(my);
+        // Free flight looks with the captured mouse, or by dragging (touch, or when capture is unavailable).
+        if (this.mode === 'free' && (locked || down)) this._look(mx, my);
+        else if (this.piloting) { this._lookAcc.dx += mx; this._lookAcc.dy += my; }
+        else if (this.mode === 'surface') this._surfaceLook(mx, my);
         else if (this.mode === 'orbit' && down) {
-          this.orbit.az -= e.movementX * 0.005;
-          this.orbit.el = Math.max(-1.55, Math.min(1.55, this.orbit.el + e.movementY * 0.005));
+          this.orbit.az -= mx * 0.005;
+          this.orbit.el = Math.max(-1.55, Math.min(1.55, this.orbit.el + my * 0.005));
         }
       }
     });
     dom.addEventListener('pointerup', (e) => {
+      release(e);
       if (!down) return;
       const click = down.moved < 5;
       down = null;
       if (!click) return;
       // Free flight and the ship modes steer with the mouse: a click captures it (Esc releases).
       if (this.mode === 'free' || this.piloting) {
+        if (e.pointerType === 'touch') return;        // touch steers by dragging; there is no mouse to capture
         // Some embedded browsers refuse mouse capture (the request rejects): steering by dragging still works.
         const p = dom.requestPointerLock?.();
         p?.catch?.(() => { if (!this._lockWarned) { this._lockWarned = true; this.onNotice?.('Mouse capture isn’t available in this browser view — drag with the mouse to steer instead'); } });
@@ -90,11 +107,7 @@ export class CameraController {
     });
     dom.addEventListener('wheel', (e) => {
       e.preventDefault();
-      const f = Math.exp(Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 200) * 0.0015);
-      if (this.mode === 'orbit') this.orbit.k = Math.max(this._minK(), Math.min(5e7, this.orbit.k * f));
-      else if (this.mode === 'free') this.speedMul = Math.max(1e-3, Math.min(1e3, this.speedMul / f));
-      else if (this.piloting && this.ship) this.ship.speedMul = Math.max(1e-3, Math.min(1e3, this.ship.speedMul / f));
-      else if (this.mode === 'surface') { this.surf.fov = Math.max(1, Math.min(100, this.surf.fov * f)); }   // binocular zoom
+      this._zoom(Math.exp(Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 200) * 0.0015));
     }, { passive: false });
     window.addEventListener('keydown', (e) => {
       if (e.target.closest && e.target.closest('input, select, textarea')) return;
@@ -105,6 +118,14 @@ export class CameraController {
     window.addEventListener('blur', () => this.keys.clear());
     // Ctrl (descend) + W (thrust) = the browser's close-tab shortcut; ask before leaving mid-flight.
     window.addEventListener('beforeunload', (e) => { if (this.mode === 'free' || this.piloting) { e.preventDefault(); e.returnValue = ''; } });
+  }
+
+  /** Wheel or pinch: f < 1 zooms in (orbit distance, surface field of view) or raises the top speed (flight). */
+  _zoom(f) {
+    if (this.mode === 'orbit') this.orbit.k = Math.max(this._minK(), Math.min(5e7, this.orbit.k * f));
+    else if (this.mode === 'free') this.speedMul = Math.max(1e-3, Math.min(1e3, this.speedMul / f));
+    else if (this.piloting && this.ship) this.ship.speedMul = Math.max(1e-3, Math.min(1e3, this.ship.speedMul / f));
+    else if (this.mode === 'surface') { this.surf.fov = Math.max(1, Math.min(100, this.surf.fov * f)); }   // binocular zoom
   }
 
   _look(dx, dy) {

@@ -191,7 +191,7 @@ To stop Claude Code asking permission for every tool call, add `"mcp__sol-simula
 - `node tools/fit-moons.mjs` — refit the moons' mean elements to Horizons (writes `js/data/moonElements.js`).
 - `node tools/pack-stars.mjs` — repack the Yale Bright Star Catalogue into `js/data/stars.js`.
 
-Data sources: JPL SSD (Standish planetary elements, SBDB, CAD, Horizons DE441 and satellite ephemerides), Meeus *Astronomical Algorithms* (Moon), IAU WGCCRE (rotation), Yale Bright Star Catalogue 5th ed. via CDS VizieR (V/50), CelesTrak GP data (Earth satellites; SGP4 via [satellite.js](https://github.com/shashwatak/satellite-js), MIT, vendored in `js/vendor/satellite/`).
+Data sources: VSOP87A planetary theory (Bretagnon & Francou, IMCCE; Mercury–Neptune), JPL SSD (Horizons DE441 for Pluto and satellite ephemerides, SBDB, CAD, Standish elements for the drawn orbit shapes), Meeus *Astronomical Algorithms* (Moon), IAU WGCCRE (rotation), Yale Bright Star Catalogue 5th ed. via CDS VizieR (V/50), CelesTrak GP data (Earth satellites; SGP4 via [satellite.js](https://github.com/shashwatak/satellite-js), MIT, vendored in `js/vendor/satellite/`).
 
 ## Credits
 

@@ -11,9 +11,22 @@
 //   in-plane:     mean longitude λ(t) = λ0 + n·t + Σ libration sinusoids
 //                 periapsis ϖ(t) = ϖ0 + ϖ̇·t (ϖ̇ from the JPL table), eccentricity e
 //   position:     standard ellipse with M = λ − ϖ, ω = ϖ − Ω.
-// Run: node tools/fit-moons.mjs            (≈ 1 minute, 20 Horizons requests)
+// e and ϖ are fitted to the longitude AND the radius (r/ā − 1 = −e·cos(λ − ϖ)), and the samples
+// include 16 dense windows (16 points over two orbits each) spread over 1850–2050. Without those
+// the apsidal rate ϖ̇ was aliased by the sparse sampling (Mimas came out at 5.98°/day instead of
+// 1.00°/day and at half its eccentricity, a 3.4° error). ϖ̇ is scanned on a grid fine enough to
+// keep the phase over the 200 years, between the two readings of the JPL table's apsidal period
+// (period of ϖ, or of ω = ϖ − Ω).
+// The equation-of-centre argument uses the moon's TRUE longitude, so a large libration (Mimas, ±43°)
+// does not smear the eccentricity term. Io and Europa keep the longitude-only fit: their eccentricity
+// is forced by the Laplace resonance and is carried by the resonance terms.
+// The result is checked on independent dates by tests/accuracy.test.mjs.
+// Run: node tools/fit-moons.mjs [--only mimas,tethys] [--dry]
+//      (≈ 15 minutes the first time, about 200 Horizons requests; the vectors are cached in .cache/moons)
 // =============================================================================
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { MOON_ELEMENTS as PREVIOUS } from '../js/data/moonElements.js';
 import { MOON_DATA } from '../js/moons.js';
 import { OBLIQUITY_J2000, ROTATION_MODELS } from '../js/ephemeris.js';
 
@@ -39,7 +52,15 @@ function eclToFrame(v, [alpha, delta]) {
   return [m[0] * q[0] + m[3] * q[1] + m[6] * q[2], m[1] * q[0] + m[4] * q[1] + m[7] * q[2], m[2] * q[0] + m[5] * q[1] + m[8] * q[2]];
 }
 
+const CACHE_DIR = fileURLToPath(new URL('../.cache/moons/', import.meta.url));
+const ONLY = process.argv.includes('--only') ? process.argv[process.argv.indexOf('--only') + 1].split(',') : null;
+const DRY = process.argv.includes('--dry');
+// Eccentricity forced by the Laplace resonance (carried by the resonance terms, not by e and ϖ).
+const FORCED = new Set(['io', 'europa']);
+
 async function fetchVectors(id, center, jds) {
+  const cacheFile = CACHE_DIR + `${id}-${jds.length}.json`;
+  if (existsSync(cacheFile)) return JSON.parse(readFileSync(cacheFile, 'utf8'));
   const out = [];
   for (let k = 0; k < jds.length; k += 60) {   // chunk TLIST
     const chunk = jds.slice(k, k + 60);
@@ -61,6 +82,8 @@ async function fetchVectors(id, center, jds) {
     if (!ok) throw new Error(`Horizons failed for ${id}`);
     await sleep(300);
   }
+  mkdirSync(CACHE_DIR, { recursive: true });
+  writeFileSync(cacheFile, JSON.stringify(out));
   return out;
 }
 
@@ -88,6 +111,8 @@ async function fitMoon(m, cache = null) {
   for (let k = 0; k < 48; k++) t.add(J2000 + (k / 48) * 4 * P);
   for (let s = P / 12; s < 150 * YR; s *= 1.5) { t.add(J2000 + s); t.add(J2000 - s); }
   for (let k = 0; k <= 160; k++) t.add(J2000 - 150 * YR + (k / 160) * 200 * YR + (k % 7) * P * 0.137);
+  // Dense windows: 16 points over two orbits, at 16 epochs — they pin down e and ϖ locally (no aliasing).
+  for (let w = 0; w < 16; w++) for (let k = 0; k < 16; k++) t.add(J2000 - 150 * YR + ((w + 0.5) / 16) * 200 * YR + (k / 16) * 2 * P);
   const jds = [...t].filter((j) => j >= J2000 - 150 * YR && j <= J2000 + 50.9 * YR).sort((a, b) => a - b);
   // Re-use downloaded vectors across resonance rounds (fresh objects each time: the fit annotates them).
   let raw = cache && cache[m.key];
@@ -147,17 +172,37 @@ async function fitMoon(m, cache = null) {
   //    Columns: [1, t, t²/2 (in centuries² to keep conditioning), e-terms…, resonance s/c…, libration s/c].
   const res = RESONANCE[m.key] || [];
   const C2 = (36525 * 36525);
-  // Apsidal precession: for noticeably eccentric orbits, scan the rate (quick fit without libration).
-  if (m.e > 0.01 && wRate) {
+  // Radial rows: r/ā − 1 = −e·cos(λ − ϖ) = −cos(arg)·(e cos ϖ0) − sin(arg)·(e sin ϖ0), weighted ×2 so that
+  // they count like the 2e·sin(λ − ϖ) longitude term (both in radians).
+  const rMean = data.reduce((sum, d) => sum + d.r, 0) / data.length, RW = 2;
+  const useRadial = !FORCED.has(m.key);
+  const radialRows = (rate, width) => !useRadial ? [] : data.map((d) => {
+    const arg = (d.lam - rate * d.t) * DEG, r = new Array(width).fill(0);
+    r[3] = -RW * Math.cos(arg); r[4] = -RW * Math.sin(arg);
+    return r;
+  });
+  const radialB = useRadial ? data.map((d) => RW * (d.r / rMean - 1)) : [];
+  const lsqR = (rows, b, rate) => lsq(rows.concat(radialRows(rate, rows[0].length)), b.concat(radialB));
+  // Apsidal precession ϖ̇: scan the rate with a quick fit (no libration) on longitude + radius.
+  // The JPL table's apsidal period may be that of ϖ or of ω = ϖ − Ω, so both readings bracket the scan;
+  // the step keeps the phase within 0.1 rad over the data span.
+  // Not for the forced-eccentricity moons, and not when the table's apsidal period is meaningless
+  // (Tethys: e ≈ 0, "0.005 yr").
+  if (m.e >= 0.001 && wRate && m.Pw >= 0.05 && useRadial) {
+    // The scan uses the RADIUS only: r/ā − 1 = c − e·cos(λ_true − ϖ̇·t − ϖ0). It depends on the true longitude
+    // alone, so an unmodelled libration of the mean longitude (Mimas: ±43°) cannot swamp the 2e signal.
     const quick = (rate) => {
-      const rows = data.map((d) => { const arg = (lam0 + n * d.t - rate * d.t) * DEG;
-        return [1, d.t, (d.t * d.t) / C2, 2 * Math.sin(arg), -2 * Math.cos(arg), 1.25 * Math.sin(2 * arg), -1.25 * Math.cos(2 * arg)]; });
-      const b = data.map((d) => d.lam * DEG), x = lsq(rows, b);
+      const rows = data.map((d) => { const arg = (d.lam - rate * d.t) * DEG; return [1, Math.cos(arg), Math.sin(arg)]; });
+      const b = data.map((d) => d.r / rMean - 1), x = lsq(rows, b);
       let ss = 0; rows.forEach((r, k) => { let v = 0; for (let i = 0; i < r.length; i++) v += r[i] * x[i]; ss += (v - b[k]) ** 2; });
       return ss;
     };
-    let best = quick(wRate), bestRate = wRate;
-    for (let f = 0.2; f <= 3; f += 0.005) { const s = quick(wRate * f); if (s < best) { best = s; bestRate = wRate * f; } }
+    const cands = [wRate, wRate + nodeRate].filter((r) => r > 0);
+    const lo = 0.5 * Math.min(...cands), hi = 1.5 * Math.max(...cands);
+    const span = data[data.length - 1].t - data[0].t, step = (0.1 / DEG) / span;
+    let best = Infinity, bestRate = wRate;
+    for (let r = lo; r <= hi; r += step) { const q = quick(r); if (q < best) { best = q; bestRate = r; } }
+    for (let r = bestRate - step; r <= bestRate + step; r += step / 20) { const q = quick(r); if (q < best) { best = q; bestRate = r; } }
     wRate = bestRate;
   }
   let e = m.e, varpi0 = (m.node + m.w), lib = null, lib2 = null, rms = 0, ndot = 0, resTerms = [];
@@ -166,7 +211,7 @@ async function fitMoon(m, cache = null) {
     const periods = [null, ...Array.from({ length: 141 }, (_, k) => (10 + k) * YR)];
     for (const Pl of periods) {
       const rows = data.map((d) => {
-        const lm = lam0 + n * d.t, arg = (lm - wRate * d.t) * DEG;
+        const lm = lam0 + n * d.t, arg = ((useRadial ? d.lam : lm) - wRate * d.t) * DEG;
         const r = [1, d.t, (d.t * d.t) / C2, 2 * Math.sin(arg), -2 * Math.cos(arg), 1.25 * Math.sin(2 * arg), -1.25 * Math.cos(2 * arg)];
         for (const q of res) { const a = resonanceArg(q, lm, d.t); r.push(Math.sin(a), Math.cos(a)); }
         // Libration: fundamental + 2nd/3rd harmonics (resonant librations are not pure sinusoids).
@@ -174,7 +219,7 @@ async function fitMoon(m, cache = null) {
         return r;
       });
       const b = data.map((d) => d.lam * DEG);
-      const x = lsq(rows, b);
+      const x = lsqR(rows, b, wRate);
       let ss = 0; rows.forEach((r, k) => { let v = 0; for (let i = 0; i < r.length; i++) v += r[i] * x[i]; ss += (v - b[k]) ** 2; });
       const rr = Math.sqrt(ss / data.length) / DEG;
       if (rr < best.rms * (Pl ? 0.8 : 1)) Object.assign(best, { rms: rr, x, Pl });
@@ -183,14 +228,14 @@ async function fitMoon(m, cache = null) {
     if (best.Pl) {
       for (let Pl = best.Pl - YR; Pl <= best.Pl + YR; Pl += 0.02 * YR) {
         const rows = data.map((d) => {
-          const lm = lam0 + n * d.t, arg = (lm - wRate * d.t) * DEG;
+          const lm = lam0 + n * d.t, arg = ((useRadial ? d.lam : lm) - wRate * d.t) * DEG;
           const r = [1, d.t, (d.t * d.t) / C2, 2 * Math.sin(arg), -2 * Math.cos(arg), 1.25 * Math.sin(2 * arg), -1.25 * Math.cos(2 * arg)];
           for (const q of res) { const a = resonanceArg(q, lm, d.t); r.push(Math.sin(a), Math.cos(a)); }
           for (let hmn = 1; hmn <= 3; hmn++) r.push(Math.sin((2 * Math.PI * hmn * d.t) / Pl), Math.cos((2 * Math.PI * hmn * d.t) / Pl));
           return r;
         });
         const b = data.map((d) => d.lam * DEG);
-        const x = lsq(rows, b);
+        const x = lsqR(rows, b, wRate);
         let ss = 0; rows.forEach((r, k) => { let v = 0; for (let i = 0; i < r.length; i++) v += r[i] * x[i]; ss += (v - b[k]) ** 2; });
         const rr = Math.sqrt(ss / data.length) / DEG;
         if (rr < best.rms) Object.assign(best, { rms: rr, x, Pl });
@@ -202,7 +247,7 @@ async function fitMoon(m, cache = null) {
     best.P2 = null;
     if (SECOND_TERM && best.rms > 0.3) {
       const baseCols = (d, Pl) => {
-        const lm = lam0 + n * d.t, arg = (lm - wRate * d.t) * DEG;
+        const lm = lam0 + n * d.t, arg = ((useRadial ? d.lam : lm) - wRate * d.t) * DEG;
         const r = [1, d.t, (d.t * d.t) / C2, 2 * Math.sin(arg), -2 * Math.cos(arg), 1.25 * Math.sin(2 * arg), -1.25 * Math.cos(2 * arg)];
         for (const q of res) { const a = resonanceArg(q, lm, d.t); r.push(Math.sin(a), Math.cos(a)); }
         if (Pl) for (let hmn = 1; hmn <= 3; hmn++) r.push(Math.sin((2 * Math.PI * hmn * d.t) / Pl), Math.cos((2 * Math.PI * hmn * d.t) / Pl));
@@ -212,7 +257,7 @@ async function fitMoon(m, cache = null) {
       for (let k = 0; k < 400; k++) {
         const P2 = 0.3 * YR * Math.pow(500, k / 399);
         const rows = data.map((d) => [...baseCols(d, best.Pl), Math.sin((2 * Math.PI * d.t) / P2), Math.cos((2 * Math.PI * d.t) / P2)]);
-        const x = lsq(rows, b);
+        const x = lsqR(rows, b, wRate);
         let ss = 0; rows.forEach((r, j) => { let v = 0; for (let i = 0; i < r.length; i++) v += r[i] * x[i]; ss += (v - b[j]) ** 2; });
         const rr = Math.sqrt(ss / data.length) / DEG;
         if (rr < best.rms * 0.8) Object.assign(best, { rms: rr, x, P2 });
@@ -252,6 +297,7 @@ function resonanceArg(q, lamSelf, t) {
 let results = [];
 const report = (r) => console.log(`n=${r.n.toFixed(6)}°/d (P=${(360 / r.n).toFixed(6)} d) e=${r.e} i=${r.i}° rms=${r.rms}° plane=${r.planeRms}°${r.lib ? ` lib ${(r.lib.P / YR).toFixed(2)} yr amp ${Math.hypot(...r.lib.h[0]).toFixed(2)}°` : ''}${r.lib2 ? ` + ${(r.lib2.P / YR).toFixed(3)} yr amp ${Math.hypot(r.lib2.s, r.lib2.c).toFixed(2)}°` : ''}${r.res.length ? ` +${r.res.length} resonance terms` : ''}`);
 for (const m of MOON_DATA) {
+  if (ONLY && !ONLY.includes(m.key)) { const r = { key: m.key, ...PREVIOUS[m.key] }; FITTED[m.key] = r; results.push(r); continue; }
   process.stdout.write(`${m.name.padEnd(10)} `);
   const r = await fitMoon(m);
   results.push(r);
@@ -264,7 +310,7 @@ RESONANCE.ganymede = [{ with: 'callisto', k: 1 }, { with: 'europa', k: 1 }, { wi
 // Iterate so each moon's resonance arguments use the other moons' FINAL mean longitudes.
 const cache = {};
 for (let round = 1; round <= 3; round++) {
-  for (const key of ['io', 'europa', 'ganymede']) {
+  for (const key of ['io', 'europa', 'ganymede'].filter((k) => !ONLY || ONLY.includes(k))) {
     const m = MOON_DATA.find((x) => x.key === key);
     process.stdout.write(`${m.name.padEnd(10)} (resonance round ${round}) `);
     const r = await fitMoon(m, cache);
@@ -273,7 +319,7 @@ for (let round = 1; round <= 3; round++) {
   }
 }
 const body = results.map((r) => `  ${r.key}: ${JSON.stringify({ ...r, key: undefined, samples: undefined })},`).join('\n');
-writeFileSync(new URL('../js/data/moonElements.js', import.meta.url),
+if (!DRY) writeFileSync(new URL('../js/data/moonElements.js', import.meta.url),
 `// Mean orbital elements for the major moons, least-squares fitted to JPL Horizons planetocentric
 // vectors over 1850–2050 by tools/fit-moons.mjs (generated ${new Date().toISOString().slice(0, 10)}).
 // Frame: pole (α, δ ICRF) = Laplace plane or planet equator (right-hand rule); angles in degrees,
@@ -282,4 +328,4 @@ export const MOON_ELEMENTS = {
 ${body}
 };
 `);
-console.log('wrote js/data/moonElements.js');
+console.log(DRY ? 'dry run: nothing written' : 'wrote js/data/moonElements.js');
