@@ -4,7 +4,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "test": "node tests/ephemeris.test.mjs && node tests/kepler-state.test.mjs && node tests/events.test.mjs && node tests/photometry.test.mjs && node tests/data.test.mjs && node tests/satellites.test.mjs && node tests/mcp.test.mjs",
+    "test": "node tests/ephemeris.test.mjs && node tests/accuracy.test.mjs && node tests/kepler-state.test.mjs && node tests/events.test.mjs && node tests/photometry.test.mjs && node tests/data.test.mjs && node tests/satellites.test.mjs && node tests/mcp.test.mjs",
     "report": "node tools/report.mjs",
     "serve": "node tools/serve.mjs 8130",
     "fetch-data": "node fetch-data.mjs",

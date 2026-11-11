@@ -60,9 +60,80 @@ function hexPanel(r, y, cell, tilt = 0) {
   return part(g, cell);
 }
 
+/** Dish opening toward −Y (Earth, for a nadir-pointing satellite), centred at (x, y, z). */
+function dishDown(r, depth, x, y, z, cell) {
+  const pts = [];
+  for (let i = 0; i <= 10; i++) { const u = i / 10; pts.push(new THREE.Vector2(u * r, depth * u * u)); }
+  const g = new THREE.LatheGeometry(pts, 24);
+  g.rotateX(Math.PI); g.translate(x, y, z);
+  return part(g, cell);
+}
+const ball = (r, x, y, z, cell) => { const g = new THREE.SphereGeometry(r, 20, 14); g.translate(x, y, z); return part(g, cell); };
+const X = [0, 0, Math.PI / 2], Z = [Math.PI / 2, 0, 0];      // rotations that lay a cylinder along x or z
+
+/**
+ * Which model an Earth satellite gets, from its catalogue name and group, and its largest dimension in metres.
+ * Anything not recognised keeps the generic satellite.
+ */
+export function satelliteStyle(name, groupKey) {
+  const n = String(name || '').toUpperCase();
+  if (/^HST$|HUBBLE/.test(n)) return { style: 'hubble', span: 13.2, what: 'Hubble Space Telescope' };
+  if (/^ISS \(|^POISK$/.test(n)) return { style: 'iss', span: 109, what: 'International Space Station module (the whole station is shown)' };
+  if (/^CSS \(|TIANHE|WENTIAN|MENGTIAN/.test(n)) return { style: 'tiangong', span: 55, what: 'Tiangong space station module (the whole station is shown)' };
+  if (/DRAGON/.test(n)) return { style: 'dragon', span: 8.1, what: 'SpaceX Dragon capsule' };
+  if (/SOYUZ|PROGRESS|SHENZHOU|TIANZHOU/.test(n)) return { style: 'soyuz', span: 10.6, what: 'Crew or cargo ferry (Soyuz-type layout)' };
+  if (/ R\/B|^R\/B| DEB$/.test(n)) return { style: 'rocket', span: 10, what: /DEB$/.test(n) ? 'Debris (shown as a spent stage)' : 'Spent rocket stage' };
+  if (['gps', 'galileo', 'glonass', 'beidou'].includes(groupKey)) return { style: 'navsat', span: 17, what: 'Navigation satellite' };
+  if (groupKey === 'geo') return { style: 'geosat', span: 30, what: 'Geostationary communications satellite (typical layout)' };
+  return { style: 'satellite', span: 10, what: 'Generic satellite model' };
+}
+
 export function buildModel(style) {
   const P = [];
   switch (style) {
+    case 'hubble':            // 13.2 m tube (x): 2.4 m telescope barrel, wider aft shroud, open door, two solar arrays, two dishes
+      P.push(cyl(0.16, 0.16, 1.15, 0.38, 0, 0, SILVER, X, 24), cyl(0.21, 0.21, 0.75, -0.57, 0, 0, SILVER, X, 24),
+        cyl(0.215, 0.215, 0.05, -0.2, 0, 0, GOLD, X, 24), cyl(0.14, 0.14, 0.02, 0.955, 0, 0, BLACK, X, 24),
+        box(0.02, 0.3, 0.32, 1.0, 0.2, 0, SILVER, [0, 0, -0.9]),
+        box(0.42, 0.012, 0.52, 0.1, 0, 0.56, CELL), box(0.42, 0.012, 0.52, 0.1, 0, -0.56, CELL),
+        cyl(0.01, 0.01, 1.2, 0.1, 0, 0, SILVER, Z), cyl(0.008, 0.008, 0.5, -0.3, -0.25, 0, SILVER),
+        dishDown(0.07, 0.02, -0.3, -0.5, 0, WHITE), dishDown(0.07, 0.02, -0.3, 0.5, 0, WHITE), cyl(0.008, 0.008, 0.5, -0.3, 0.25, 0, SILVER));
+      break;
+    case 'tiangong':          // T shape: Tianhe core (z), Wentian and Mengtian labs (±x) with the large wings at their ends
+      P.push(cyl(0.075, 0.075, 0.42, 0, 0, 0.3, WHITE, Z, 20), cyl(0.05, 0.05, 0.2, 0, 0, 0.6, WHITE, Z, 20), ball(0.085, 0, 0, 0, WHITE),
+        cyl(0.075, 0.075, 0.5, 0.33, 0, 0, WHITE, X, 20), cyl(0.075, 0.075, 0.5, -0.33, 0, 0, WHITE, X, 20),
+        cyl(0.02, 0.02, 0.16, 0.66, 0, 0, SILVER, X), cyl(0.02, 0.02, 0.16, -0.66, 0, 0, SILVER, X),
+        box(0.16, 0.006, 0.98, 0.76, 0, 0, CELL), box(0.16, 0.006, 0.98, -0.76, 0, 0, CELL),
+        box(0.42, 0.006, 0.09, 0.3, 0, 0.5, CELL), box(0.42, 0.006, 0.09, -0.3, 0, 0.5, CELL),
+        cyl(0.05, 0.06, 0.22, 0, 0, -0.19, SILVER, Z, 16), box(0.3, 0.005, 0.06, 0, 0, -0.24, CELL),      // docked ferry
+        cyl(0.06, 0.06, 0.24, 0, -0.2, 0, SILVER, null, 16));                                                // nadir port craft
+      break;
+    case 'navsat':            // box bus, two wings, Earth-facing antenna panel with a ring of helix elements (−Y)
+      P.push(box(0.22, 0.28, 0.22, 0, 0, 0, GOLD), box(0.74, 0.012, 0.2, 0.61, 0, 0, CELL), box(0.74, 0.012, 0.2, -0.61, 0, 0, CELL),
+        cyl(0.012, 0.012, 0.5, 0, 0, 0, SILVER, X), box(0.26, 0.02, 0.26, 0, -0.15, 0, WHITE), cyl(0.03, 0.02, 0.14, 0, -0.23, 0, SILVER));
+      for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; P.push(cyl(0.012, 0.018, 0.1, 0.09 * Math.cos(a), -0.21, 0.09 * Math.sin(a), SILVER, null, 8)); }
+      break;
+    case 'dragon':            // 8.1 m: blunt capsule (nose +Y) on a trunk with body-mounted solar cells and four fins
+      P.push(cyl(0.14, 0.46, 0.75, 0, 0.42, 0, WHITE, null, 28), cyl(0.06, 0.14, 0.12, 0, 0.85, 0, DARK, null, 20),
+        cyl(0.47, 0.47, 0.06, 0, 0.03, 0, DARK, null, 28), cyl(0.45, 0.45, 0.9, 0, -0.45, 0, WHITE, null, 28),
+        box(0.02, 0.82, 0.62, 0.45, -0.45, 0, CELL), box(0.02, 0.82, 0.3, 0.38, -0.45, 0.33, CELL, [0, -0.75, 0]), box(0.02, 0.82, 0.3, 0.38, -0.45, -0.33, CELL, [0, 0.75, 0]));
+      for (let k = 0; k < 4; k++) { const a = (k / 4) * Math.PI * 2 + Math.PI / 4; const g = new THREE.BoxGeometry(0.16, 0.3, 0.02); g.translate(0.52, -0.75, 0); g.rotateY(a); P.push(part(g, WHITE)); }
+      break;
+    case 'soyuz':             // orbital module (ball), bell-shaped descent module, flared service module, two wings; nose +Y
+      P.push(ball(0.2, 0, 0.62, 0, SILVER), cyl(0.05, 0.08, 0.12, 0, 0.86, 0, DARK, null, 12), cyl(0.17, 0.25, 0.32, 0, 0.3, 0, DARK, null, 24),
+        cyl(0.25, 0.25, 0.42, 0, -0.07, 0, WHITE, null, 24), cyl(0.25, 0.31, 0.2, 0, -0.38, 0, WHITE, null, 24), cyl(0.1, 0.16, 0.1, 0, -0.53, 0, DARK, null, 16),
+        box(0.72, 0.012, 0.22, 0.62, -0.15, 0, CELL), box(0.72, 0.012, 0.22, -0.62, -0.15, 0, CELL));
+      break;
+    case 'geosat':            // tall bus, long sun-tracking wings (x), two big reflectors and a feed horn toward Earth (−Y)
+      P.push(box(0.2, 0.3, 0.2, 0, 0, 0, GOLD), box(0.78, 0.008, 0.19, 0.6, 0.02, 0, CELL), box(0.78, 0.008, 0.19, -0.6, 0.02, 0, CELL),
+        cyl(0.008, 0.008, 0.44, 0, 0.02, 0, SILVER, X), dishDown(0.15, 0.04, 0, -0.1, 0.27, WHITE), dishDown(0.15, 0.04, 0, -0.1, -0.27, WHITE),
+        cyl(0.006, 0.006, 0.2, 0, -0.08, 0.18, SILVER, Z), cyl(0.006, 0.006, 0.2, 0, -0.08, -0.18, SILVER, Z),
+        dishDown(0.07, 0.03, 0, -0.17, 0, WHITE), cyl(0.03, 0.05, 0.08, 0, 0.19, 0, DARK, null, 12));
+      break;
+    case 'rocket':            // spent upper stage: tank (x), adapter ring, engine bell
+      P.push(cyl(0.2, 0.2, 1.3, 0.1, 0, 0, WHITE, X, 24), cyl(0.2, 0.17, 0.12, 0.81, 0, 0, SILVER, X, 24), cyl(0.21, 0.21, 0.04, -0.3, 0, 0, DARK, X, 24),
+        cyl(0.06, 0.16, 0.34, -0.73, 0, 0, DARK, [0, 0, -Math.PI / 2], 20), ball(0.07, 0.2, 0.22, 0, GOLD), ball(0.07, 0.2, -0.22, 0, GOLD));
+      break;
     case 'voyager':           // 3.7 m dish on a decagonal bus, RTG boom, magnetometer boom (13 m)
       P.push(dish(0.28, 0.07, 0.12, WHITE), cyl(0.16, 0.16, 0.1, 0, 0.05, 0, GOLD, null, 10),
         cyl(0.015, 0.015, 0.35, -0.25, 0, 0, SILVER, [0, 0, Math.PI / 2]), cyl(0.04, 0.04, 0.12, -0.42, 0, 0, DARK, [0, 0, Math.PI / 2]),

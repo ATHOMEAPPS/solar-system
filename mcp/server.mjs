@@ -177,7 +177,7 @@ const TOOLS = [
     inputSchema: obj({ code: { type: 'string' } }, ['code']), run: (a) => page('eval', a, 60000) },
 ];
 
-const INSTRUCTIONS = `Sol is a scientifically accurate Solar System simulator (planets 1800–2050 from JPL elements, moons fitted to JPL Horizons, eclipses verified against NASA, ~960 Earth satellites via SGP4).
+const INSTRUCTIONS = `Sol is a scientifically accurate Solar System simulator (planets 1800–2050 from VSOP87, checked against JPL Horizons to about 1″, moons fitted to JPL Horizons, eclipses verified against NASA, ~960 Earth satellites via SGP4).
 - For NUMBERS (positions, eclipse times, satellite passes, what's in the sky) use the calculation tools: body_position, sky_at, find_eclipses, find_conjunctions, upcoming_events, satellite_find/state/passes. They need no browser.
 - To SHOW something, use the sim_* tools: sim_open first if no tab is connected, then sim_set_time / sim_focus / sim_camera / sim_surface / sim_show_event, and sim_screenshot to check the view.
 - All times are UTC ISO 8601. Longitudes are east-positive. Satellite predictions are only valid near the snapshot date (±30 days; best within 3) — say so when relevant.

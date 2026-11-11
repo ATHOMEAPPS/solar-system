@@ -12,6 +12,23 @@ import { cometInfo } from './comets.js';
 import { SHIP_MODELS } from './ship.js';
 
 const $ = (id) => document.getElementById(id);
+const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* storage blocked */ } } };
+const p2 = (n) => String(n).padStart(2, '0');
+const jdToDate = (jd) => new Date((jd - 2440587.5) * 86400000);
+/** JD UTC → "YYYY-MM-DD HH:MM[:SS]" in the viewer's own time zone. */
+function jdToLocalString(jd, withSeconds = true) {
+  const d = jdToDate(jd);
+  if (isNaN(d)) return '—';
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}${withSeconds ? ':' + p2(d.getSeconds()) : ''}`;
+}
+let tzFmt = null;
+/** Short zone name for that date (e.g. "EST", "GMT+1"), following daylight saving. */
+function tzName(jd) {
+  try {
+    tzFmt = tzFmt || new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' });
+    return tzFmt.formatToParts(jdToDate(jd)).find((x) => x.type === 'timeZoneName')?.value || 'local';
+  } catch { return 'local'; }
+}
 
 function fmtKm(km) {
   if (!isFinite(km)) return '—';
@@ -47,11 +64,15 @@ export class UI {
   constructor(app) {
     this.app = app;
     this._acc = 0;
+    this.tz = store.get('sol.tz') === 'utc' ? 'utc' : 'local';
     this._buildBodyList();
     this._buildTimeBar();
     this._buildModes();
     this._buildGUI();
     this._bindKeys();
+    this._buildHudToggle();
+    this._buildWelcome();
+    this._buildTouch();
     $('verify-close').onclick = () => $('verify').classList.remove('open');
     $('verify-rerun').onclick = () => this.runVerify();
   }
@@ -63,10 +84,40 @@ export class UI {
       const btn = document.createElement('button');
       btn.className = 'body-btn' + (b.kind === 'moon' ? ' moon' : '');
       btn.innerHTML = `<span class="dot" style="--c:${b.color}"></span>${b.name}`;
-      btn.onclick = () => this.app.focus(b);
+      btn.onclick = () => { document.body.classList.remove('show-bodies'); this.app.focus(b); };
       btn.dataset.key = b.key;
       list.appendChild(btn);
     }
+    const search = $('body-search');
+    search.addEventListener('input', () => this._filterBodies());
+    search.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { search.value = ''; this._filterBodies(); search.blur(); return; }
+      if (e.key !== 'Enter') return;
+      const first = [...list.querySelectorAll('.body-btn')].find((b) => b.style.display !== 'none');
+      if (first) { first.click(); return; }
+      // Not a listed body: try the Earth satellites by name (e.g. "hst", "tianhe").
+      const q = search.value.trim().toLowerCase(), L = this.app.satLayer;
+      const i = L && q ? L.sats.findIndex((s) => String(s.name || '').toLowerCase().includes(q)) : -1;
+      if (i >= 0) { document.body.classList.remove('show-bodies'); this.app.selectSatellite(i); }
+    });
+  }
+
+  /** Show only the bodies whose name contains the search text (section titles follow their items). */
+  _filterBodies() {
+    const q = $('body-search').value.trim().toLowerCase();
+    let section = null, any = false, shown = 0;
+    const closeSection = () => { if (section) section.style.display = any ? '' : 'none'; };
+    for (const el of $('body-list').children) {
+      if (el.classList.contains('body-section')) { closeSection(); section = el; any = false; continue; }
+      const hit = !q || el.textContent.toLowerCase().includes(q);
+      el.style.display = hit ? '' : 'none';
+      if (hit) { any = true; shown++; }
+    }
+    closeSection();
+    const L = this.app.satLayer;
+    const sat = !shown && q && L ? L.sats.find((s) => String(s.name || '').toLowerCase().includes(q)) : null;
+    $('body-none').style.display = shown ? 'none' : 'block';
+    $('body-none').textContent = sat ? `Press Enter for the satellite ${sat.name}` : 'Nothing found';
   }
 
   /** Append bodies added after start-up (dwarf planets, named asteroids, their moons) in grouped sections. */
@@ -85,13 +136,14 @@ export class UI {
         for (const m of list.filter((x) => x.kind === 'moon' && x.parent === b.key)) this._bodyButton(el, m);
       }
     }
+    this._filterBodies();
   }
 
   _bodyButton(el, b) {
     const btn = document.createElement('button');
     btn.className = 'body-btn' + (b.kind === 'moon' ? ' moon' : '');
     btn.innerHTML = `<span class="dot" style="--c:${b.color}"></span>${b.shortName || b.name}`;
-    btn.onclick = () => this.app.focus(b);
+    btn.onclick = () => { document.body.classList.remove('show-bodies'); this.app.focus(b); };
     btn.dataset.key = b.key;
     el.appendChild(btn);
   }
@@ -113,15 +165,24 @@ export class UI {
     const input = $('date-input');
     input.min = '1800-01-01T00:00'; input.max = '2050-12-31T23:59';
     $('btn-go').onclick = () => this._jumpToInput();
+    const tzBtn = $('btn-tz');
+    const syncTz = () => { tzBtn.textContent = this.tz === 'utc' ? 'UTC' : 'Local'; input.setAttribute('aria-label', `Jump to date (${this.tz === 'utc' ? 'UTC' : 'your local time'})`); };
+    tzBtn.onclick = () => {
+      this.tz = this.tz === 'utc' ? 'local' : 'utc';
+      store.set('sol.tz', this.tz); syncTz(); this._acc = 1;
+      this.toast(this.tz === 'utc' ? 'Showing times in UTC' : `Showing times in your local time (${tzName(clock.jdUTC)})`);
+    };
+    syncTz();
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') this._jumpToInput(); });
     this._syncTimeButtons();
   }
   _jumpToInput() {
-    const jd = utcStringToJD($('date-input').value.replace('T', ' '));
-    if (!isFinite(jd)) { this.toast('Enter a date/time (UTC)'); return; }
-    if (jd < MIN_JD || jd > MAX_JD) { this.toast('Date must be between 1800 and 2050 (validity of the JPL elements)'); return; }
+    const v = $('date-input').value, local = this.tz !== 'utc';
+    const jd = local ? (v ? new Date(v).getTime() / 86400000 + 2440587.5 : NaN) : utcStringToJD(v.replace('T', ' '));
+    if (!isFinite(jd)) { this.toast(`Enter a date and time (${local ? 'your local time' : 'UTC'})`); return; }
+    if (jd < MIN_JD || jd > MAX_JD) { this.toast('Date must be between 1800 and 2050 (the range the planet positions are checked for)'); return; }
     this.app.clock.setJD(jd);
-    this.toast(`Jumped to ${jdToUTCString(jd, false)} UTC`);
+    this.toast(`Jumped to ${local ? `${jdToLocalString(jd, false)} ${tzName(jd)}` : `${jdToUTCString(jd, false)} UTC`}`);
   }
   _syncTimeButtons() {
     const c = this.app.clock;
@@ -148,11 +209,55 @@ export class UI {
       catch { this.toast('Clipboard blocked by the browser — run "npm run report" to get VERIFY-REPORT.md instead', 6000); }
     };
     $('info-follow').onclick = () => { const b = this.app.system.selected; if (b) this.app.focus(b); };
+    $('btn-bodies').onclick = () => { document.body.classList.remove('show-gui'); document.body.classList.toggle('show-bodies'); };
+    $('btn-gear').onclick = () => { document.body.classList.remove('show-bodies'); if (document.body.classList.toggle('show-gui')) this.gui.open(); };
+    $('btn-help').onclick = () => $('welcome').classList.add('open');
+    $('info-name').onclick = () => $('info').classList.toggle('expanded');     // phone: the facts are folded under the name
+  }
+
+  /** "More details" in the top-left panel: the technical rows are hidden until asked for. */
+  _buildHudToggle() {
+    const hud = $('hud'), btn = $('hud-more');
+    const set = (on) => { hud.classList.toggle('details', on); btn.textContent = on ? 'Fewer details ▴' : 'More details ▾'; btn.setAttribute('aria-expanded', String(on)); };
+    set(store.get('sol.hudDetails') === '1');
+    btn.onclick = () => { const on = !hud.classList.contains('details'); set(on); store.set('sol.hudDetails', on ? '1' : '0'); this._acc = 1; };
+  }
+
+  /** First-visit welcome card with a few things to try (reopen with "?"). Not shown when the page was opened with URL options. */
+  _buildWelcome() {
+    const el = $('welcome'), app = this.app, by = app.system.byKey;
+    const close = () => { el.classList.remove('open'); store.set('sol.welcomed', '1'); };
+    $('welcome-close').onclick = close;
+    el.addEventListener('click', (e) => { if (e.target === el) close(); });
+    window.addEventListener('keydown', (e) => { if (e.code === 'Escape' && el.classList.contains('open')) close(); });
+    const actions = {
+      saturn: () => app.focus(by.saturn),
+      moon: () => app.enterSurface(by.moon),
+      events: () => app.events.toggle(true),
+      ship: async () => { await app.selectShip('enterprise'); app.setCameraMode(3); },
+    };
+    el.querySelectorAll('[data-w]').forEach((b) => (b.onclick = () => { close(); actions[b.dataset.w](); }));
+    if (!store.get('sol.welcomed') && !location.search) el.classList.add('open');
+  }
+
+  /** Touch screens: on-screen flight pad (holds the same keys as the keyboard) while flying or walking. */
+  _buildTouch() {
+    const body = document.body, keys = this.app.cam.keys;
+    if (window.matchMedia?.('(pointer: coarse)').matches) body.classList.add('touch');
+    window.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') body.classList.add('touch'); }, { passive: true });
+    document.querySelectorAll('#pad [data-k]').forEach((b) => {
+      const on = (e) => { e.preventDefault(); keys.add(b.dataset.k); b.classList.add('held'); };
+      const off = () => { keys.delete(b.dataset.k); b.classList.remove('held'); };
+      b.addEventListener('pointerdown', on);
+      for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, off);
+      b.addEventListener('contextmenu', (e) => e.preventDefault());
+    });
   }
   syncMode(mode) {
     const n = { free: 1, orbit: 2, fly: 2, chase: 3, cockpit: 4 }[mode] ?? 0;
     document.querySelectorAll('#modes [data-mode]').forEach((b) => b.classList.toggle('active', +b.dataset.mode === n));
     $('btn-surface').classList.toggle('active', mode === 'surface');
+    document.body.classList.toggle('flying', mode === 'free' || mode === 'chase' || mode === 'cockpit' || mode === 'surface');
     const help = mode === 'free' ? 'free' : mode === 'chase' || mode === 'cockpit' ? 'ship' : mode === 'surface' ? 'surface' : 'orbit';
     for (const h of ['free', 'orbit', 'ship', 'surface']) $('help-' + h).style.display = h === help ? '' : 'none';
     if (this.surfState) this._syncSurface();
@@ -161,7 +266,7 @@ export class UI {
   // --- lil-gui ----------------------------------------------------------------
   _buildGUI() {
     const app = this.app, scale = app.scale, sys = app.system;
-    const gui = new GUI({ title: 'Settings', width: 260 });
+    const gui = new GUI({ title: '⚙ Settings', width: 290 });
     gui.domElement.id = 'gui';
     this.gui = gui;
     const s = { scaleMode: scale.mode === 'visual' ? 'Visual' : 'True', exag: scale.exag, distExp: scale.distExp,
@@ -212,7 +317,7 @@ export class UI {
     fV.add({ ev: () => app.events.toggle(true) }, 'ev').name('Upcoming events… (U)');
     fV.close();
     [fK, fE, fC].forEach((f) => f.close());
-    if (window.innerWidth < 900) gui.close();
+    gui.close();          // starts as a single "Settings" bar; opens on click
   }
   /** Called once /data/ has been loaded (or found missing). */
   onDataLoaded(data, sb) {
@@ -427,8 +532,9 @@ export class UI {
     if (this._acc < 0.1) return;
     this._acc = 0;
     const app = this.app, c = app.clock, cam = app.cam, t = cam.target, visual = app.scale.s > 0.001;
-    $('hud-date').textContent = jdToUTCString(c.jdUTC) + ' UTC';
-    $('hud-jd').textContent = `JD ${utcToTDB(c.jdUTC).toFixed(5)} TDB`;
+    $('hud-date').textContent = this.tz === 'utc' ? jdToUTCString(c.jdUTC) + ' UTC' : `${jdToLocalString(c.jdUTC)} ${tzName(c.jdUTC)}`;
+    $('hud-utc').textContent = jdToUTCString(c.jdUTC);
+    $('hud-jd').textContent = `${utcToTDB(c.jdUTC).toFixed(5)} TDB`;
     $('hud-rate').textContent = fmtRate(c);
     $('hud-scale').textContent = app.scale.transitioning ? 'transitioning…' : visual ? `Visual (radii ×${app.scale.exag})` : 'True scale';
     const modeName = { free: 'Free flight', orbit: 'Orbit', fly: 'Flying…', chase: 'Ship · chase', cockpit: 'Ship · cockpit', surface: 'Surface view' }[cam.mode];
@@ -467,7 +573,17 @@ export class UI {
         ? (sh.some((x) => (x.radiantAlt ?? 90) > 0) ? ' · meteors visible' : ' · radiant below horizon') : '');
     // Keep the body list just below the HUD (the HUD grows when data rows/warnings appear).
     const hud = $('hud'), hb = hud.offsetTop + hud.offsetHeight + 10;
-    if (this._hudBottom !== hb) { this._hudBottom = hb; $('bodies').style.top = hb + 'px'; $('bodies').style.maxHeight = `calc(100vh - ${hb + 90}px)`; }
+    const helpH = $('help').offsetHeight;                      // leave room for the key hints under the list
+    if (this._hudBottom !== hb || this._helpH !== helpH) {
+      this._hudBottom = hb; this._helpH = helpH;
+      $('bodies').style.top = hb + 'px'; $('bodies').style.maxHeight = `calc(100vh - ${hb + helpH + 38}px)`;
+    }
+    // Heights of the bottom bars, for the phone layout (stacked panels sit above them).
+    const tbH = $('timebar').offsetHeight, mdH = $('modes').offsetHeight;
+    if (this._tbH !== tbH || this._mdH !== mdH) {
+      this._tbH = tbH; this._mdH = mdH;
+      document.documentElement.style.setProperty('--tb-h', tbH + 'px'); document.documentElement.style.setProperty('--md-h', mdH + 'px');
+    }
     // Orbit-uncertainty note (two-body propagation far from the element epoch), refreshed ~1×/s.
     if (this.sb?.count && (this._uncT = (this._uncT || 0) + 1) % 10 === 0) {
       const u = this.sb.uncertainty(utcToTDB(c.jdUTC));
@@ -510,7 +626,7 @@ export class UI {
       $('info-name').style.setProperty('--c', b.color);
       $('info-type').textContent = b.type;
       const km = (v) => (v < 10 ? v.toFixed(2) : v.toLocaleString('en-US', { maximumFractionDigits: 0 }));
-      $('info-radius').textContent = b.minorType === 'satellite' ? 'not in the orbital catalogue' : b.craft ? `${b.craft.span} m across (largest dimension)` : b.axes
+      $('info-radius').textContent = b.minorType === 'satellite' ? (b.spanM ? `about ${b.spanM} m across (model: ${b.modelNote})` : 'not in the orbital catalogue') : b.craft ? `${b.craft.span} m across (largest dimension)` : b.axes
         ? `${km(2 * b.axes[0])} × ${km(2 * b.axes[1])} × ${km(2 * b.axes[2])} km (mean R ${km(b.radius)} km)`
         : `${b.radius.toLocaleString('en-US')} km${b.flat ? ` (flattening ${b.flat})` : ''}`;
       $('info-mass').textContent = b.mass ? `${b.mass.toExponential(3).replace('e+', ' × 10^')} kg` : '—';

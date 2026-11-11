@@ -108,7 +108,7 @@ export class SimClock {
     if (this.jdUTC < MIN_JD || this.jdUTC > MAX_JD) {
       this.jdUTC = Math.min(MAX_JD, Math.max(MIN_JD, this.jdUTC));
       this.paused = true;
-      this.onClamp?.('Clock paused: the JPL planetary elements (Standish Table 1) are only valid for 1800–2050.');
+      this.onClamp?.('Clock paused: the simulator covers 1800–2050 (its planet, Pluto and Moon positions are checked against JPL Horizons for that span).');
     }
   }
 }

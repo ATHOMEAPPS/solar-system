@@ -2,10 +2,16 @@
 // ephemeris.js — Positions and orientations of the Sun, planets, Pluto and Moon.
 //
 // Data sources (all inline):
-//  • Planets + Pluto: E.M. Standish, "Keplerian Elements for Approximate Positions
-//    of the Major Planets", JPL SSD, Table 1 (valid 1800–2050 AD).
+//  • Mercury–Neptune and the Earth–Moon barycentre: VSOP87A (Bretagnon & Francou 1988),
+//    truncated for 1800–2050 (data/vsop87a.js, built by tools/build-vsop87.mjs). Measured
+//    against JPL Horizons (DE441) over 1800–2050: about 1″ or better (tests/accuracy.test.mjs).
+//  • Pluto: JPL Horizons vectors of the Pluto–Charon barycentre, 1799–2051, interpolated
+//    (data/plutoTrack.js, built by tools/build-pluto.mjs). Outside that span: Standish elements.
+//  • Orbit shapes (the drawn orbit lines) and dates outside the tables: E.M. Standish,
+//    "Keplerian Elements for Approximate Positions of the Major Planets", JPL SSD, Table 1.
+//    These mean elements are NOT used for positions: they are up to 12′ off for Saturn.
 //  • Moon: Meeus, "Astronomical Algorithms" 2nd ed., ch. 47 (ELP-2000/82 truncated,
-//    Tables 47.A and 47.B; ≈10″ in longitude, ≈4″ latitude).
+//    Tables 47.A and 47.B). Measured against Horizons over 1800–2050: worst 11″, rms 3″.
 //  • Rotation: IAU WGCCRE 2009/2015 reports (pole α0, δ0 and prime meridian W).
 //  • Earth rotation: GMST (IAU 1982 / Meeus 12.4).
 //
@@ -15,6 +21,8 @@
 // =============================================================================
 import { DEG, wrap360, ellipticPosition } from './kepler.js';
 import { J2000, centuries } from './time.js';
+import { VSOP87A } from './data/vsop87a.js';
+import { PLUTO_TRACK } from './data/plutoTrack.js';
 
 export const AU_KM = 149597870.7;
 export const C_KM_S = 299792.458;
@@ -59,11 +67,56 @@ export function planetElements(key, jdTDB) {
   return { a, e, i: I * DEG, node: Om * DEG, argPeri: w * DEG, M: M * DEG };
 }
 
-/** Heliocentric ecliptic J2000 position of a Table-1 body in km. */
-export function planetHelioKm(key, jdTDB, out = [0, 0, 0]) {
+/** Heliocentric ecliptic J2000 position (km) from the Standish mean elements: approximate (see the header). */
+export function planetMeanElementsKm(key, jdTDB, out = [0, 0, 0]) {
   const el = planetElements(key, jdTDB);
   ellipticPosition(el.a * AU_KM, el.e, el.i, el.node, el.argPeri, el.M, out);
   return out;
+}
+
+// VSOP87 is quoted at 1″ for 2000 years around J2000 (inner planets: 4000 years); the truncation
+// here was sized for |t| ≤ 0.25 millennia, so outside 1750–2250 the mean elements take over.
+const VSOP_T_MAX = 0.25;
+
+/** VSOP87A: Σ_k t^k Σ A·cos(B + C·t), t in Julian millennia from J2000. AU → km. */
+function vsop87Km(series, t, out) {
+  for (let v = 0; v < 3; v++) {
+    const pw = series[v];
+    let sum = 0, tk = 1;
+    for (let k = 0; k < pw.length; k++) {
+      const s = pw[k];
+      let q = 0;
+      for (let i = 0; i < s.length; i += 3) q += s[i] * Math.cos(s[i + 1] + s[i + 2] * t);
+      sum += q * tk; tk *= t;
+    }
+    out[v] = sum * AU_KM;
+  }
+  return out;
+}
+
+/** Pluto–Charon barycentre from the Horizons table (cubic Hermite between samples); null outside the table. */
+function plutoTrackKm(jdTDB, out) {
+  const { jd0, step, data } = PLUTO_TRACK, n = data.length / 6;
+  const u = (jdTDB - jd0) / step;
+  if (!(u >= 0 && u <= n - 1)) return null;
+  const i = Math.min(n - 2, Math.floor(u)), s = u - i, a = i * 6, b = a + 6;
+  const s2 = s * s, s3 = s2 * s;
+  const h00 = 2 * s3 - 3 * s2 + 1, h10 = s3 - 2 * s2 + s, h01 = -2 * s3 + 3 * s2, h11 = s3 - s2;
+  for (let k = 0; k < 3; k++) out[k] = h00 * data[a + k] + h10 * step * data[a + 3 + k] + h01 * data[b + k] + h11 * step * data[b + 3 + k];
+  return out;
+}
+
+/**
+ * Heliocentric ecliptic J2000 position in km of mercury … neptune, 'emb' (Earth–Moon barycentre)
+ * or 'pluto' (Pluto–Charon barycentre). VSOP87A / the Horizons table inside their spans, the
+ * Standish mean elements outside them.
+ */
+export function planetHelioKm(key, jdTDB, out = [0, 0, 0]) {
+  if (key === 'pluto') return plutoTrackKm(jdTDB, out) || planetMeanElementsKm(key, jdTDB, out);
+  const t = (jdTDB - J2000) / 365250;
+  const series = VSOP87A[key];
+  if (series && Math.abs(t) <= VSOP_T_MAX) return vsop87Km(series, t, out);
+  return planetMeanElementsKm(key, jdTDB, out);
 }
 
 // --- Moon: Meeus ch. 47 -------------------------------------------------------
@@ -141,7 +194,7 @@ export function moonGeoKm(jdTDB, out = [0, 0, 0]) {
 
 /**
  * Rotate from mean ecliptic/equinox of date to ecliptic J2000 (Lieske 1977 angles, Meeus 21.5).
- * v_J2000 = Rz(Π) · Rx(−π) · Rz(−(p + Π)) · v_date, where π = inclination of the date
+ * v_J2000 = Rz(Π) · Rx(+π) · Rz(−(p + Π)) · v_date, where π = inclination of the date
  * ecliptic on the J2000 ecliptic, Π = longitude of its node, p = general precession in longitude.
  */
 export function eclipticOfDateToJ2000(x, y, z, jdTDB, out = [0, 0, 0]) {
@@ -152,8 +205,11 @@ export function eclipticOfDateToJ2000(x, y, z, jdTDB, out = [0, 0, 0]) {
   // Rz(−(p+Π)): longitude measured from the node
   let a = -(p + Pi), c = Math.cos(a), s = Math.sin(a);
   let x1 = c * x - s * y, y1 = s * x + c * y, z1 = z;
-  // Rx(−π): tilt from date ecliptic to J2000 ecliptic
-  c = Math.cos(-eta); s = Math.sin(-eta);
+  // Rx(+π): tilt from date ecliptic to J2000 ecliptic. (For t > 0 the date ecliptic is tilted by +π about
+  // the node line as seen from J2000, so a date-frame vector is rotated by +π to express it in J2000.
+  // Checked against JPL Horizons over 1800–2050 in tests/accuracy.test.mjs: the opposite sign leaves a
+  // latitude error of 2π·sin(λ − Π), about 94″ per century.)
+  c = Math.cos(eta); s = Math.sin(eta);
   const y2 = c * y1 - s * z1, z2 = s * y1 + c * z1;
   // Rz(Π)
   c = Math.cos(Pi); s = Math.sin(Pi);
