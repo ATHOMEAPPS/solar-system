@@ -39,11 +39,11 @@ The Saturn above is the view from 22° above its ring plane on **15 June 2017**.
 <table>
   <tr>
     <td width="50%"><img src="docs/images/eclipse-2026.jpg" alt="The total solar eclipse of 12 August 2026 seen from the central line off Iceland, with the solar corona around the Moon"></td>
-    <td width="50%"><img src="docs/images/satellites.jpg" alt="Earth surrounded by the orbit paths of about 960 satellites: the geostationary belt and the GPS, Galileo, GLONASS and BeiDou shells"></td>
+    <td width="50%"><img src="docs/images/hubble.jpg" alt="The Hubble Space Telescope in orbit above Earth near the day-night line, with its two solar arrays and open aperture door"></td>
   </tr>
   <tr>
     <td><b>Total solar eclipse, 12 August 2026</b>, from the central line off Iceland at totality. The Events panel stages this for you.</td>
-    <td><b>Earth's satellites today.</b> The geostationary belt, the navigation-satellite shells and the low-orbit swarm, with each satellite's orbit path computed with SGP4.</td>
+    <td><b>Hubble over Earth.</b> One of about 960 tracked satellites, each placed with SGP4 from current orbital data. Select any of them to fly alongside it.</td>
   </tr>
   <tr>
     <td colspan="2"><img src="docs/images/solar-system.jpg" alt="The inner Solar System with planetary orbits, the asteroid belt, comet orbits and meteor streams"></td>
